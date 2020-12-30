@@ -1,0 +1,50 @@
+Druid details URL:
+to select col1/col2 -/api/v1/metrics/{dataSource}?columns=col1,col2
+to select * - /api/v1/metrics/{dataSource}?columns=&
+            = /api/v1/metrics/{dataSource}?
+dataSource = table name in druid
+
+in "columns", one can give .summarise, which will do a group by on the column.
+            , one can give .sum , which will sum
+            , one can give .min, which will give min in that column
+            , one can give .max
+            , one can give .count
+            , one can give .avg
+            , one can give .top
+        
+where:
+/api/v1/metrics/{dataSource}?columns=col1,col2&col1=val1
+col1=val1
+col1={"notEqual":["Fr","germany"]}
+col1={"startsWith": "Fr"}
+col1={"startsWith": "Fr", "endsWith": "e", "operator":"or"}
+col1={"startsWith": "Fr", "endsWith": "e", "contains":"r", "operator":"or"}
+col1={"doesNotStartsWith": "Fr", "doesNotEndsWith": "e", "doesNotContain":"r", "operator":"or"}
+for "IN" -> /api/v1/metrics/{dataSource}?columns=col1,col2&col1=val1,val2..
+for OR -> operator={"or":[{"startsWith": "Fr"}, ]}
+
+
+less than / greater than / between:
+col1 = {"lt":40}
+col1 = {"gt":40}
+col1 = {"lt":40,"gt":50,"operator":"between"}
+col1 = {"lt":40,"gt":50,"operator":"or"}
+col1 = {"lt":40,"gt":50,"operator":"and"}
+col1 = {"lt":40,"gt":50,"operator":"between"}
+
+
+for multiple columns with OR or AND:
+&or=[{"columns":[col1,col2]},{"columns":[col3,col4]}]
+&and=[{"columns":[col1,col2]},{"columns":[col3,col4]}]
+
+//(col1 or col2) or (col3 or col4)
+
+groupby: will be done on select columns without . operator
+
+order.Desc=col1
+order.Asc=col1
+
+
+
+having - YTD
+cumulative -YTD
