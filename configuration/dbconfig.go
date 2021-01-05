@@ -12,6 +12,10 @@ func Configure() map[string]string {
     //product_config may be DEV, UAT, PROD, TEST, TESTENV etc.
     product_config := os.Getenv("LANTERN")
 
+    if product_config == "" {
+        product_config = "DEV"
+    }
+
     if product_config == "DEV" {
         viper.SetConfigName("config.development")
         viper.SetConfigType("json")
