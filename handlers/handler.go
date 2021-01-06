@@ -13,7 +13,7 @@ import (
 	builder "../builders"
 	config "../configuration"
 	model "../models"
-	optimizer "../optimizers"
+	// optimizer "../optimizers"
 	_ "../request"
 )
 
@@ -37,7 +37,6 @@ func getData(w http.ResponseWriter, r *http.Request) {
 	//Reading conf values
 	conf := config.Configure()
 	serverurl := conf["serverurl"]
-	recordsize := conf["recordsize"]
 
 	response, err := http.Post(serverurl, "application/json", reqBody2)
 
@@ -50,10 +49,13 @@ func getData(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err2)
 	}
 
+	/*
+	recordsize := conf["recordsize"]
 	flag := optimizer.Optimize(recordsize, data)
 	if flag == true {
 		data = optimizer.ReExecuteQuery(sql1, conf)
 	}
+	*/
 
 	json.NewEncoder(w).Encode(data)
 }
