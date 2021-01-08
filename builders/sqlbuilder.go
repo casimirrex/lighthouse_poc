@@ -10,7 +10,8 @@ import (
 	sqlConstant "../constants"
 )
 
-func SqlBuilder(dataSource string, filter map[string][]string) string {
+//SQLBuilder is ...
+func SQLBuilder(dataSource string, filter map[string][]string) string {
 
 	/* calling select clause Builder */
 	selectStatement, groupByStatement, havingColumn := selectAndGroupByBuilder(filter)
@@ -46,8 +47,8 @@ func SqlBuilder(dataSource string, filter map[string][]string) string {
 	if filter["limit"] != nil {
 		limitCondition = limitClauseBuilder(filter)
 	}
-
-	return selectStatement + sqlConstant.From + dataSource + whereCondition + groupByStatement + havingClause + orderByCondition + limitCondition
+	query := selectStatement + sqlConstant.From + dataSource + whereCondition + groupByStatement + havingClause + orderByCondition + limitCondition
+	return query
 }
 
 func selectAndGroupByBuilder(filter map[string][]string) (string, string, string) {
