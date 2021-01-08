@@ -27,13 +27,13 @@ func Optimize(dataSource string, filter map[string][]string) (records []map[stri
 		fmt.Println("Invalid record_count in config")
 		panic(err.Error())
 	}
-	log.Println("Allowed record size is", iMaxRecords)
+	log.Println("Max record count limit is", iMaxRecords)
 
 	sqlQuery := builder.SQLBuilder(dataSource, filter)
-	log.Println("sqlQuery:", sqlQuery)
+	log.Println("SQLBuilder:", sqlQuery)
 
 	iCountRecords := getCount(sqlQuery, serverurl)
-	log.Println("Actual record size is", iCountRecords)
+	log.Println("Total record count by getCount()", iCountRecords)
 
 	if iCountRecords <= iMaxRecords {
 		/*Execute query as it is and return result*/
@@ -73,14 +73,20 @@ func getCount(strSQL, serverURL string) (iCountRecords int) {
 	//if select colnames from
 	var newSQL string
 	if strings.Contains(strSQL, "order by") {
-		newSQL = "select count(1) from ( " + strSQL + " )"
-		//newSQL = strSQL
+		//newSQL = "select count(1) from ( " + strSQL + " )"
+		index := strings.Index(strSQL, "order by")
+		strSQL = strSQL[:index]
+		newSQL = strings.Replace(strSQL, "*", "count(1)", 1)
+	} else if strings.Contains(strSQL, "group by") {
+		newSQL = strSQL
 	} else if strings.Contains(strSQL, "*") {
 		newSQL = strings.Replace(strSQL, "*", "count(1)", 1)
-	} else {
+	} else if !strings.Contains(strSQL, "*") {
 		index := strings.Index(strSQL, "from")
 		strSQL = strSQL[index:]
 		newSQL = "select count(1) " + strSQL
+	} else {
+		newSQL = strSQL
 	}
 	result := executeQuery(newSQL, serverURL)
 	sCountRecords := fmt.Sprint(result[0]["EXPR$0"])
@@ -89,7 +95,6 @@ func getCount(strSQL, serverURL string) (iCountRecords int) {
 		fmt.Println("Invalid recordCount in sCountRecords")
 		panic(err.Error())
 	}
-	log.Println("iCountRecords:", iCountRecords)
 	return
 }
 func executeQuery(sqlQuery, serverURL string) (result []map[string]interface{}) {
@@ -110,12 +115,10 @@ func executeQuery(sqlQuery, serverURL string) (result []map[string]interface{}) 
 		fmt.Print(errHTTP.Error())
 	}
 	/*Decoding results*/
-	log.Println("before Decode(&result)")
 	errDecode := json.NewDecoder(response.Body).Decode(&result)
 	if errDecode != nil {
-		log.Println("in Decode(&result)")
 		log.Fatal(errDecode)
 	}
-	log.Println("Final record size after optimiz", len(result))
+	log.Println("Record counts from executeQuery()", len(result))
 	return
 }
