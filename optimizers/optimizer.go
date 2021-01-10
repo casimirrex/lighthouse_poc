@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	builder "../builders"
 	config "../configuration"
@@ -16,31 +17,51 @@ import (
 
 //Optimize is ...
 func Optimize(dataSource string, filter map[string][]string) (records []map[string]interface{}) {
-	/*Reading config values*/
-	configuration := config.Configure()
-	serverurl := configuration["serverurl"]
-	sMaxRecords := configuration["recordsize"]
-
-	/*Evaluates the resultSet*/
-	iMaxRecords, err := strconv.Atoi(sMaxRecords)
-	if err != nil {
-		fmt.Println("Invalid record_count in config")
-		panic(err.Error())
+	/*We assume that startTime and endTime must be available in filter (query parameters)*/
+	var sTime, eTime string
+	if len(filter["startTime"]) > 0 {
+		sTime = filter["startTime"][0]
 	}
-	log.Println("Max record count limit is", iMaxRecords)
-
-	sqlQuery := builder.SQLBuilder(dataSource, filter)
-	log.Println("SQLBuilder:", sqlQuery)
-
-	iCountRecords := getCount(sqlQuery, serverurl)
-	log.Println("Total record count by getCount()", iCountRecords)
-
-	if iCountRecords <= iMaxRecords {
-		/*Execute query as it is and return result*/
-		records = executeQuery(sqlQuery, serverurl)
+	if len(filter["endTime"]) > 0 {
+		eTime = filter["endTime"][0]
+	}
+	timeDiff := diffTimestamps(sTime, eTime)
+	log.Println("timeDiff.Hours():", timeDiff.Hours())
+	if !(timeDiff.Hours() <= 24) { //bypassed check using negation '!'
+		log.Println("time range: <=24h")
+		//Requested data from Cache/Reids
+		//....
+		//....
 	} else {
-		/*Need to build and hit optimized query*/
-		records = executeBucketQueries(sqlQuery, serverurl, iMaxRecords, iCountRecords)
+		log.Println("time range: >24h")
+		//Requested data from Druid
+
+		/*Reading config values*/
+		configuration := config.Configure()
+		serverurl := configuration["serverurl"]
+		sMaxRecords := configuration["recordsize"]
+
+		/*Evaluates the resultSet*/
+		iMaxRecords, err := strconv.Atoi(sMaxRecords)
+		if err != nil {
+			fmt.Println("Invalid record_count in config")
+			panic(err.Error())
+		}
+		log.Println("Max record count limit is", iMaxRecords)
+
+		sqlQuery := builder.SQLBuilder(dataSource, filter)
+		log.Println("SQLBuilder:", sqlQuery)
+
+		iCountRecords := getCount(sqlQuery, serverurl)
+		log.Println("Total record count by getCount()", iCountRecords)
+
+		if iCountRecords <= iMaxRecords {
+			/*Execute query as it is and return result*/
+			records = executeQuery(sqlQuery, serverurl)
+		} else {
+			/*Need to build and hit optimized query*/
+			records = executeBucketQueries(sqlQuery, serverurl, iMaxRecords, iCountRecords)
+		}
 	}
 	return
 }
@@ -121,4 +142,22 @@ func executeQuery(sqlQuery, serverURL string) (result []map[string]interface{}) 
 	}
 	log.Println("Record counts from executeQuery()", len(result))
 	return
+}
+func diffTimestamps(startTime, endTime string) time.Duration {
+	//diffTimestamps("2019-01-24T00:00:00.000Z", "2019-01-26T00:30:20.000Z")
+	start, _ := time.Parse(time.RFC3339, startTime)
+	end, _ := time.Parse(time.RFC3339, endTime)
+	return end.Sub(start)
+}
+
+func diffTimeFromNow(startTime, endTime string) time.Duration {
+	//diffTimestamps("2019-01-24T00:00:00.000Z", "2019-01-26T00:30:20.000Z")
+	start, _ := time.Parse(time.RFC3339, startTime)
+	if (strings.ToUpper(endTime) == "NOW") || (strings.ToUpper(endTime) == "CURRENT_TIMESTAMP") {
+		//match all possibilities like => CURRENT_TIMESTAMP - INTERVAL '1' DAY
+		// 1y ago, 2m ago, 1w ago, 2w ago, 3d ago, 6h ago, 30min ago
+		fmt.Println("")
+	}
+	end := time.Now().UTC()
+	return end.Sub(start)
 }
