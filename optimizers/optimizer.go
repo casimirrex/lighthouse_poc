@@ -25,9 +25,12 @@ func Optimize(dataSource string, filter map[string][]string) (records []map[stri
 	if len(filter["endTime"]) > 0 {
 		eTime = filter["endTime"][0]
 	}
-	timeDiff := diffTimestamps(sTime, eTime)
-	log.Println("timeDiff.Hours():", timeDiff.Hours())
-	if !(timeDiff.Hours() <= 24) { //bypassed check using negation '!'
+	log.Printf("sTime %s, eTime %s\n", sTime, eTime)
+	/*To check whether requested data is from before 24 hours*/
+	timeDiff := diffTimeFromNow(sTime, "NOW")
+	log.Println("time.Now().UTC():", time.Now().UTC())
+	log.Println("diffTimeFromNow.Hours():", timeDiff.Hours())
+	if timeDiff.Hours() <= 24 { //bypassed check using negation '!'
 		log.Println("time range: <=24h")
 		//Requested data from Cache/Reids
 		//....
@@ -35,6 +38,10 @@ func Optimize(dataSource string, filter map[string][]string) (records []map[stri
 	} else {
 		log.Println("time range: >24h")
 		//Requested data from Druid
+		timeRange := diffTimestamps(sTime, eTime)
+		if timeRange.Minutes() > 5 {
+			log.Println("Time rage for requested data is greater than 5 minutes, so need to fetch data in buckets")
+		}
 
 		/*Reading config values*/
 		configuration := config.Configure()
