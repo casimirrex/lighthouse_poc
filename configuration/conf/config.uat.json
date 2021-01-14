@@ -1,9 +1,9 @@
 {
-"hostname": "172.105.42.92",
+"hostname": "157.245.101.251",
 "port": "8888",
 "username": "user1uat",
 "password": "pass123",
-"serverurl": "http://172.105.42.92:8888/druid/v2/sql/",
+"serverurl": "http://157.245.101.251:8888/druid/v2/sql/",
 "dbname": "druid",
 "recordsize": 100
 }

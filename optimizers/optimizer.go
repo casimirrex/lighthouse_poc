@@ -15,6 +15,18 @@ import (
 	model "../models"
 )
 
+var durMap = map[string]string{
+	"'10' MINUTE": "10min",
+	"'30' MINUTE": "30min",
+	"'6' HOUR":    "6H",
+	"'1' DAY":     "1D",
+	"'15' DAY":    "15D",
+	"'1' MONTH":   "1M",
+	"'6' MONTH":   "6M",
+	"'1' YEAR":    "1Y",
+	"'5' YEAR":    "5Y",
+}
+
 //Optimize is ...
 func Optimize(dataSource string, filter map[string][]string) (records []map[string]interface{}) {
 	/*We assume that startTime and endTime must be available in filter (query parameters)*/
@@ -59,14 +71,23 @@ func Optimize(dataSource string, filter map[string][]string) (records []map[stri
 		sqlQuery := builder.SQLBuilder(dataSource, filter)
 		log.Println("SQLBuilder:", sqlQuery)
 
-		iCountRecords := getCount(sqlQuery, serverurl)
-		log.Println("Total record count by getCount()", iCountRecords)
+		iCountRecords, sampleDuration := getCount(sqlQuery, serverurl)
+		log.Println("Total record count by getCount() sampleDuration", iCountRecords, sampleDuration)
+		//Assume how many records using iCountRecords, sampleDuration
+		// expectedRecords := (timeRange/sampleDuration)*iCountRecords
+		// if expectedRecords > iMaxRecords {
+		// 		[{ "message" : "We have %s <- expectedRecords, do you want to get all?"" }]
+		// } else {
+		//		records = executeQuery(sqlQuery, serverurl)
+		// }
 
 		if iCountRecords <= iMaxRecords {
 			/*Execute query as it is and return result*/
+			log.Println("Case1")
 			records = executeQuery(sqlQuery, serverurl)
 		} else {
 			/*Need to build and hit optimized query*/
+			log.Println("Case2")
 			records = executeBucketQueries(sqlQuery, serverurl, iMaxRecords, iCountRecords)
 		}
 	}
@@ -83,9 +104,13 @@ func executeBucketQueries(sqlQuery, serverURL string, maxRecords, countRecords i
 	if m > 0 {
 		n = n + 1
 	}
+	log.Println("numBuckets:", n)
+	n = 5 //Restricted to 5 for debug
+	limit, offset := 25, 0
 	for i := 0; i < n; i++ {
 		/*Adding time range or limit in query or optimizing*/
-		newSQL := sqlQuery
+		newSQL := fmt.Sprintf("%s limit %d offset %d", sqlQuery, limit, offset)
+		offset = offset + 25
 		/*Accumulating all records in records*/
 		newRecords := executeQuery(newSQL, serverURL)
 		for _, item := range newRecords {
@@ -95,7 +120,7 @@ func executeBucketQueries(sqlQuery, serverURL string, maxRecords, countRecords i
 	}
 	return
 }
-func getCount(strSQL, serverURL string) (iCountRecords int) {
+func getCount(strSQL, serverURL string) (iCountRecords int, duration string) {
 	//if order by in strSQL
 	//if select * from
 	//if select colnames from
@@ -116,12 +141,38 @@ func getCount(strSQL, serverURL string) (iCountRecords int) {
 	} else {
 		newSQL = strSQL
 	}
-	result := executeQuery(newSQL, serverURL)
-	sCountRecords := fmt.Sprint(result[0]["EXPR$0"])
-	iCountRecords, err := strconv.Atoi(sCountRecords)
-	if err != nil {
-		fmt.Println("Invalid recordCount in sCountRecords")
-		panic(err.Error())
+	timeArr := []string{
+		"'10' MINUTE",
+		"'30' MINUTE",
+		"'6' HOUR",
+		"'1' DAY",
+		"'15' DAY",
+		"'1' MONTH",
+		"'6' MONTH",
+		"'1' YEAR",
+		"'5' YEAR",
+	}
+	pos := strings.Index(newSQL, " __time")
+	newSQL = newSQL[:pos]
+	for _, el := range timeArr {
+		//Replace timeClause by __time >= CURRENT_TIMESTAMP - INTERVAL '10' MINUTE ...
+		newSQLt := newSQL + " __time >= CURRENT_TIMESTAMP - INTERVAL " + el
+		result := executeQuery(newSQLt, serverURL)
+		sCountRecords := "0"
+		if len(result) > 0 {
+			sCountRecords = fmt.Sprint(result[0]["EXPR$0"])
+			fmt.Println("getCount=s>", sCountRecords, el)
+		}
+		nCountRecords, err := strconv.Atoi(sCountRecords)
+		if err != nil {
+			fmt.Println("Invalid recordCount in sCountRecords")
+			panic(err.Error())
+		}
+		if nCountRecords > 0 {
+			iCountRecords = nCountRecords
+			duration = durMap[el]
+			break
+		}
 	}
 	return
 }

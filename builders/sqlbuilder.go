@@ -3,14 +3,14 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
-	_ "io"
-	_ "reflect"
+	"log"
+	"regexp"
 	s "strings"
 
 	sqlConstant "../constants"
 )
 
-//SQLBuilder is ...
+//SQLBuilder is exported func
 func SQLBuilder(dataSource string, filter map[string][]string) string {
 
 	/* calling select clause Builder */
@@ -47,8 +47,8 @@ func SQLBuilder(dataSource string, filter map[string][]string) string {
 	if filter["limit"] != nil {
 		limitCondition = limitClauseBuilder(filter)
 	}
-	query := selectStatement + sqlConstant.From + dataSource + whereCondition + groupByStatement + havingClause + orderByCondition + limitCondition
-	return query
+
+	return selectStatement + sqlConstant.From + dataSource + whereCondition + groupByStatement + havingClause + orderByCondition + limitCondition
 }
 
 func selectAndGroupByBuilder(filter map[string][]string) (string, string, string) {
@@ -73,7 +73,7 @@ func selectAndGroupByBuilder(filter map[string][]string) (string, string, string
 					actualColumn := groupByFunction + "(" + colSplit[0] + ")" //=count(column)
 					havingColumn = actualColumn
 					// fmt.Println("havingColumn : ", havingColumn)
-					selectColumns = append(selectColumns, actualColumn)
+					selectColumns = append(selectColumns, actualColumn+sqlConstant.As+"\""+col+"\"")
 				} else {
 					selectColumns = append(selectColumns, col)   // append select columns
 					groupByColumns = append(groupByColumns, col) //append group by columns
@@ -82,17 +82,24 @@ func selectAndGroupByBuilder(filter map[string][]string) (string, string, string
 			columns := s.Join(selectColumns[:], ",") // converting array to comma separated string
 			if enableGroupBy {
 				groupByColumns := s.Join(groupByColumns[:], ",") // converting array to comma separated string
+
+				//added for bucketBy  - timebucket
+				bucketClause := bucketFilter(filter)
+				if bucketClause != "" {
+					columns = columns + "," + bucketClause
+					if groupByColumns == "" {
+						groupByColumns = bucketClause
+					}
+					groupByColumns = groupByColumns + "," + bucketClause
+				}
 				return columns, groupByColumns, havingColumn
-			} else {
-				return columns, "", havingColumn
 			}
-		} else { // if . operator in not present in columns
-			columns := tempCols[0]
 			return columns, "", havingColumn
 		}
-	} else {
-		return "", "", havingColumn
+		columns := tempCols[0]
+		return columns, "", havingColumn
 	}
+	return "", "", havingColumn
 }
 
 func whereClauseBuilder(filter map[string][]string, havingColumn string) (string, string) {
@@ -101,9 +108,9 @@ func whereClauseBuilder(filter map[string][]string, havingColumn string) (string
 
 	havingClause := ""
 
-	for column, _ := range filter {
+	for column := range filter {
 		// append all the column names from the queryparams except with column, limit, order keys
-		if column != "column" && column != "limit" && column != "order.Asc" && column != "order.Desc" && column != "or" && column != "and" && column != "startTime" && column != "endTime" && column != "time.eq" && column != "time.ne" {
+		if column != "column" && column != "limit" && column != "order.Asc" && column != "order.Desc" && column != "or" && column != "and" && column != "startTime" && column != "endTime" && column != "time.eq" && column != "time.ne" && column != "by" {
 			columns = append(columns, column)
 		}
 	}
@@ -128,7 +135,7 @@ func whereClauseBuilder(filter map[string][]string, havingColumn string) (string
 					fmt.Println("decodeError : ", decodeError)
 				}
 				jsonKeys := make([]string, 0, len(dataMap))
-				for jsonKey, _ := range dataMap {
+				for jsonKey := range dataMap {
 					jsonKeys = append(jsonKeys, jsonKey) //appending all the keys from the json like 'startsWith' etc
 				}
 				// fmt.Println("len(filter) : ", len(filter))
@@ -234,9 +241,9 @@ func whereClauseBuilder(filter map[string][]string, havingColumn string) (string
 				havingClause = havingClause + tempHaving
 			} else { // if given value is not a json then append as equal to
 				if s.Contains(havingColumn, column) {
-					havingClause = havingClause + havingColumn + " = '" + v + "'"
+					havingClause = havingClause + havingColumn + " = " + quoteString(v)
 				} else {
-					whereCondition = whereCondition + column + " = '" + v + "'"
+					whereCondition = whereCondition + column + " = " + quoteString(v)
 				}
 			}
 		}
@@ -285,6 +292,9 @@ func timeCheckFilter(filter map[string][]string) string {
 	timeEqual := filter["time.eq"]
 	timeNotEqual := filter["time.ne"]
 
+	// log.Println("starttime >> ", startTime)
+	// log.Println("starttime >> ", s.Contains(startTime[0], "-ago"))
+
 	timeStampLiteral := `TIMESTAMP `
 	timeClause := ""
 
@@ -293,13 +303,24 @@ func timeCheckFilter(filter map[string][]string) string {
 	// we will add TIMESTAMP literal before the value
 	// endTime= means all time less than and equal to endTime
 	// startTime= means all time greater and equal to startTime
+	// startTime= 1h-ago / 1m-ago / 1s-ago / 1D-ago / 1M-ago / 1Y-ago >> (h-hour/m-minute/s-second/D-Day/M-Month/Y-Year)
 	// time= means all time equal to only time
 	// time.ne= means all time not equal to time
 
 	if len(startTime) != 0 && len(endTime) != 0 {
 		timeClause = ` __time between ` + timeStampLiteral + quoteString(startTime[0]) + " and " + timeStampLiteral + quoteString(endTime[0])
 	} else if len(startTime) != 0 {
-		timeClause = ` __time >= ` + timeStampLiteral + quoteString(startTime[0])
+		if s.Contains(startTime[0], "-ago") {
+			/* regular exp to extract numeric data */
+			reExpNum := regexp.MustCompile("[0-9]+")
+			data := reExpNum.FindAllString(startTime[0], -1)
+			/* regular exp to extract time interval i.e., h/m/s/Y/M/D */
+			reExpChar := regexp.MustCompile("[a-zA-Z]+")
+			char := reExpChar.FindAllString(startTime[0], -1)
+			timeClause = ` __time >= ` + sqlConstant.CurrentTimestamp + `-` + sqlConstant.Interval + quoteString(data[0]) + sqlConstant.TimeIntervals[char[0]]
+		} else {
+			timeClause = ` __time >= ` + timeStampLiteral + quoteString(startTime[0])
+		}
 	} else if len(endTime) != 0 {
 		timeClause = ` __time >= ` + timeStampLiteral + quoteString(endTime[0])
 	} else if len(timeEqual) != 0 {
@@ -315,4 +336,27 @@ func timeCheckFilter(filter map[string][]string) string {
 
 func quoteString(s string) string {
 	return "'" + s + "'"
+}
+
+func bucketFilter(filter map[string][]string) string {
+	bucketBy := filter["by"]
+	bucketByClause := ""
+	// can be DAY, WEEK, MONTH, HOUR, SECOND,MINUTE, QUARTER, YEAR
+	if len(bucketBy) != 0 {
+		if validateBucketFilter(bucketBy[0]) {
+			bucketByClause = `floor( __time to ` + bucketBy[0] + ` )`
+		} else {
+			log.Fatalln("Invalid parameter for timeBucket")
+		}
+	}
+	return bucketByClause
+}
+
+func validateBucketFilter(bucketBy string) bool {
+	for _, val := range sqlConstant.BucketBy {
+		if bucketBy == val {
+			return true
+		}
+	}
+	return false
 }

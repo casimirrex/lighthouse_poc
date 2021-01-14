@@ -5,7 +5,8 @@
 
 #### Sample Request:
 
-- http://127.0.0.1:8084/lantern/api/v1/datasource/vrops?guestOS=Linux
+- http://localhost:8084/api/v1/metrics/vrops?guestOS=Linux
+- http://localhost:8084/api/v1/metrics/vrops?guestOS=Linux&order.Asc=__time
 
 - http://localhost:8084/api/v1/metrics/wikipedia?countryName={"endsWith":"e","startsWith":"Fr","operator":"and"}&column=cityName,countryName,channel&limit=5&order.Asc=__time
 

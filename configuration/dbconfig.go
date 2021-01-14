@@ -31,6 +31,7 @@ func Configure() map[string]string {
 		viper.SetConfigName("config1.test")
 		viper.SetConfigType("env")
 	}
+	viper.AddConfigPath("lantern/configuration/conf/")
 	viper.AddConfigPath("configuration/conf/")
 	viper.AddConfigPath(".")
 
