@@ -1,9 +1,9 @@
 {
-"hostname": "157.245.101.251",
+"hostname": "10.179.206.156",
 "port": "8888",
 "username": "user1prod",
 "password": "pass123",
-"serverurl": "http://157.245.101.251:8888/druid/v2/sql/",
+"serverurl": "http://10.179.206.156:8888/druid/v2/sql/",
 "dbname": "druid",
 "recordsize": 100
 }

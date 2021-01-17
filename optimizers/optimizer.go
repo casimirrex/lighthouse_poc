@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -83,11 +84,18 @@ func Optimize(dataSource string, filter map[string][]string) (records []map[stri
 
 		if iCountRecords <= iMaxRecords {
 			/*Execute query as it is and return result*/
-			log.Println("Case1")
+			log.Println("Case1************************************")
 			records = executeQuery(sqlQuery, serverurl)
 		} else {
 			/*Need to build and hit optimized query*/
-			log.Println("Case2")
+			log.Println("Case2************************************")
+			posLimit := strings.Index(sqlQuery, " limit")
+			if posLimit > 0 {
+				r, _ := regexp.Compile(" limit ([0-9]+)")
+				s := r.FindStringSubmatch(sqlQuery)
+				iCountRecords, _ = strconv.Atoi(s[1])
+				sqlQuery = sqlQuery[:posLimit]
+			}
 			records = executeBucketQueries(sqlQuery, serverurl, iMaxRecords, iCountRecords)
 		}
 	}
@@ -105,12 +113,19 @@ func executeBucketQueries(sqlQuery, serverURL string, maxRecords, countRecords i
 		n = n + 1
 	}
 	log.Println("numBuckets:", n)
-	n = 5 //Restricted to 5 for debug
-	limit, offset := 25, 0
+	//n = 5 //Restricted to 5 for debug
+	limit, offset := 100, 0
+	if maxRecords < limit {
+		limit = maxRecords
+	}
 	for i := 0; i < n; i++ {
 		/*Adding time range or limit in query or optimizing*/
 		newSQL := fmt.Sprintf("%s limit %d offset %d", sqlQuery, limit, offset)
-		offset = offset + 25
+		offset = offset + limit
+		remainder := countRecords - offset
+		if remainder < limit {
+			limit = remainder
+		}
 		/*Accumulating all records in records*/
 		newRecords := executeQuery(newSQL, serverURL)
 		for _, item := range newRecords {
@@ -125,6 +140,12 @@ func getCount(strSQL, serverURL string) (iCountRecords int, duration string) {
 	//if select * from
 	//if select colnames from
 	var newSQL string
+	var strLimitOffset string
+	posLimitOffset := strings.Index(strSQL, " limit")
+	if posLimitOffset > 0 {
+		strLimitOffset = strSQL[posLimitOffset:]
+		strSQL = strSQL[:posLimitOffset]
+	}
 	if strings.Contains(strSQL, "order by") {
 		//newSQL = "select count(1) from ( " + strSQL + " )"
 		index := strings.Index(strSQL, "order by")
@@ -152,12 +173,24 @@ func getCount(strSQL, serverURL string) (iCountRecords int, duration string) {
 		"'1' YEAR",
 		"'5' YEAR",
 	}
-	pos := strings.Index(newSQL, " __time")
-	newSQL = newSQL[:pos]
+	posTime := strings.Index(newSQL, " __time")
+	if posTime > 0 {
+		newSQL = newSQL[:posTime]
+	}
+	posLimit := strings.Index(newSQL, " limit")
+	if posLimit > 0 {
+		newSQL = newSQL[:posLimit]
+	}
+	posWhere := strings.Index(newSQL, " where")
+	if posWhere < 0 {
+		newSQL = newSQL + " where"
+	}
+
 	for _, el := range timeArr {
 		//Replace timeClause by __time >= CURRENT_TIMESTAMP - INTERVAL '10' MINUTE ...
-		newSQLt := newSQL + " __time >= CURRENT_TIMESTAMP - INTERVAL " + el
+		newSQLt := newSQL + " __time >= CURRENT_TIMESTAMP - INTERVAL " + el + strLimitOffset
 		result := executeQuery(newSQLt, serverURL)
+		log.Println("getCount:Query executed...")
 		sCountRecords := "0"
 		if len(result) > 0 {
 			sCountRecords = fmt.Sprint(result[0]["EXPR$0"])

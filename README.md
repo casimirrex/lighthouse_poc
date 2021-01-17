@@ -17,3 +17,9 @@
   http://localhost:8084/api/v1/metrics/wikipedia?column=sum_added.max,cityName&limit=5&sum_added=115
 
 - http://localhost:8084/api/v1/metrics/wikipedia?countryName=Germany&column=sum_added.max,cityName&sum_added={"lt":50,"gt":40,"operator":"and"}
+
+- http://localhost:8084/api/v1/metrics/wikipedia?startTime=5Y-ago
+
+- http://localhost:8084/api/v1/metrics/wikipedia?startTime=5Y-ago&limit=375
+
+- http://localhost:8084/api/v1/metrics/vrops?startTime=1m-ago

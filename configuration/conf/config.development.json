@@ -5,5 +5,5 @@
 "password": "pass123",
 "serverurl": "http://157.245.101.251:8888/druid/v2/sql/",
 "dbname": "druid",
-"recordsize": "10"
+"recordsize": "100"
 }
